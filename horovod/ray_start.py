@@ -18,7 +18,7 @@ executor.start()
 # Using the stateless `run` method, a function can take in any args or kwargs
 def simple_fn():
     hvd.init()
-    print("hvd rank", hvd.rank())
+    print("hvd rank", hvd.rank(), "hvd local rank", hvd.local_rank())
     return hvd.rank()
 
 # Execute the function on all workers at once

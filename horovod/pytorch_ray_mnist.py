@@ -109,7 +109,7 @@ def train_fn(args):
     torch.manual_seed(args.seed)
     args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-    print("hvd rank:", hvd.rank(), " using cuda: ", args.cuda)
+    print("hvd rank:", hvd.rank(), " hvd local rank:", hvd.local_rank(), " using cuda: ", args.cuda)
 
     if args.cuda:
         # Horovod: pin GPU to local rank.
