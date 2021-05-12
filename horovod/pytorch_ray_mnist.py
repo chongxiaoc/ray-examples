@@ -74,12 +74,6 @@ parser.add_argument(
     default=False,
     help='use adasum algorithm to do reduction')
 parser.add_argument(
-    '--num-batches-per-commit',
-    type=int,
-    default=1,
-    help='number of batches per commit of the elastic state object'
-)
-parser.add_argument(
     '--data-dir',
     help='location of the training dataset in the local filesystem (will be downloaded if needed)'
 )
@@ -115,7 +109,7 @@ def train_fn(args):
     torch.manual_seed(args.seed)
     args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-    print("hvd rank:", hvd.rank())
+    print("hvd rank:", hvd.rank(), " using cuda: ", args.cuda)
 
     if args.cuda:
         # Horovod: pin GPU to local rank.
@@ -177,29 +171,23 @@ def train_fn(args):
     compression = (hvd.Compression.fp16
                    if args.fp16_allreduce else hvd.Compression.none)
 
-    def train():
-        # post synchronization event (worker added, worker removed) init ...
-        for epoch in range(1, args.epochs + 1):
-            model.train()
-
-            train_sampler.set_epoch(state.epoch)
-
-            for batch, (data, target) in enumerate(train_loader):
-                if args.cuda:
-                    data, target = data.cuda(), target.cuda()
-                optimizer.zero_grad()
-                output = model(data)
-                loss = F.nll_loss(output, target)
-                loss.backward()
-                optimizer.step()
-                if batch % args.log_interval == 0:
-                    # Horovod: use train_sampler to determine
-                    # the number of examples in this worker's partition.
-                    print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.
-                          format(state.epoch, state.batch * len(data),
-                                 len(train_sampler),
-                                 100.0 * state.batch / len(train_loader),
-                                 loss.item()))
+    def train(epoch):
+        model.train()
+        train_sampler.set_epoch(epoch)
+        for batch, (data, target) in enumerate(train_loader):
+            if args.cuda:
+                data, target = data.cuda(), target.cuda()
+            optimizer.zero_grad()
+            output = model(data)
+            loss = F.nll_loss(output, target)
+            loss.backward()
+            optimizer.step()
+            if batch % args.log_interval == 0:
+                # Horovod: use train_sampler to determine
+                # the number of examples in this worker's partition.
+                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.
+                        format(epoch, batch * len(data), len(train_sampler),
+                               100.0 * batch / len(train_loader), loss.item()))
 
     def test():
         model.eval()
@@ -238,13 +226,9 @@ def train_fn(args):
         compression=compression,
         op=hvd.Adasum if args.use_adasum else hvd.Average)
 
-    # adjust learning rate on reset
-    def on_state_reset():
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = args.lr * hvd.size()
-
-    train()
-    test()
+    for epoch in range(1, args.epochs + 1):
+        train(epoch)
+        test()
 
 
 if __name__ == '__main__':
