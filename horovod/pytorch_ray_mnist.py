@@ -235,7 +235,7 @@ if __name__ == '__main__':
     from horovod.ray import RayExecutor
     import ray
     args = parser.parse_args()
-    ray.init()
+    ray.init(address='auto')
     settings = RayExecutor.create_settings(timeout_s=30)
     executor = RayExecutor(settings, num_workers=args.num_workers, use_gpu=True)
     executor.start()

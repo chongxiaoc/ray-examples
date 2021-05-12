@@ -3,7 +3,7 @@ import horovod.torch as hvd
 import ray
 
 # Start the Ray cluster or attach to an existing Ray cluster
-ray.init()
+ray.init(address='auto')
 
 num_workers = 4
 
